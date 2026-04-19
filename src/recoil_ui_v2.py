@@ -82,7 +82,7 @@ from datetime import datetime
 APP_DIR = _APP_DIR
 
 # 软件版本
-SOFTWARE_VERSION = "1.0.2"
+SOFTWARE_VERSION = "1.0.3"
 
 # 添加当前目录到Python路径
 sys.path.insert(0, APP_DIR)
