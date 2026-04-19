@@ -47,9 +47,16 @@ $repo = "仓库名称"
 ## 后续更新步骤（修改代码后）
 
 ```powershell
-cd "项目目录"
+# 1. 进入项目目录
+cd "C:\Users\XOS\Desktop\压枪软件"
+
+# 2. 添加修改的文件
 "C:\Program Files\Git\cmd\git.exe" add .
+
+# 3. 提交（填写修改说明）
 "C:\Program Files\Git\cmd\git.exe" commit -m "描述你做了什么修改"
+
+# 4. 推送到 GitHub
 "C:\Program Files\Git\cmd\git.exe" push
 ```
 
