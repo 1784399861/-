@@ -27,13 +27,13 @@ RELEASE_BODY = f"""## 版本 v{VERSION}
 
 ### 更新内容
 - 请在此处填写更新内容
-- 例如：修复了 XXX 问题
-- 例如：新增了 XXX 功能
+- 例如：更新了武器压枪数据
+- 例如：新增了 XXX 武器配置
 
 ### 使用说明
 1. 下载并解压
 2. 双击运行 `启动压枪控制中心v2.bat`
-3. 点击「检查更新」可获取后续版本
+3. 点击「同步武器配置」可获取最新数据
 """
 
 # GitHub 配置（一般不需要修改）
@@ -158,16 +158,6 @@ def update_version_in_files():
     print("步骤 0: 更新代码中的版本号")
     print("=" * 60)
     
-    # 更新 src/auto_updater.py
-    auto_updater_path = os.path.join(PROJECT_DIR, "src", "auto_updater.py")
-    if os.path.exists(auto_updater_path):
-        content = open(auto_updater_path, 'r', encoding='utf-8').read()
-        old = f'CURRENT_VERSION = "{VERSION}"'
-        import re
-        content = re.sub(r'CURRENT_VERSION = "[^"]+"', f'CURRENT_VERSION = "{VERSION}"', content)
-        open(auto_updater_path, 'w', encoding='utf-8').write(content)
-        print(f"✅ 已更新: src/auto_updater.py -> CURRENT_VERSION = {VERSION}")
-    
     # 更新 src/recoil_ui_v2.py
     recoil_ui_path = os.path.join(PROJECT_DIR, "src", "recoil_ui_v2.py")
     if os.path.exists(recoil_ui_path):
@@ -176,6 +166,20 @@ def update_version_in_files():
         content = re.sub(r'SOFTWARE_VERSION = "[^"]+"', f'SOFTWARE_VERSION = "{VERSION}"', content)
         open(recoil_ui_path, 'w', encoding='utf-8').write(content)
         print(f"✅ 已更新: src/recoil_ui_v2.py -> SOFTWARE_VERSION = {VERSION}")
+    
+    # 更新 config/data_version.json
+    data_version_path = os.path.join(PROJECT_DIR, "config", "data_version.json")
+    config_dir = os.path.join(PROJECT_DIR, "config")
+    if not os.path.exists(config_dir):
+        os.makedirs(config_dir)
+    
+    data_version_data = {
+        "version": VERSION,
+        "update_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    with open(data_version_path, 'w', encoding='utf-8') as f:
+        json.dump(data_version_data, f, ensure_ascii=False, indent=2)
+    print(f"✅ 已更新: config/data_version.json -> version = {VERSION}")
 
 
 def main():
@@ -231,7 +235,7 @@ def main():
             print(f"请手动访问: {release_url}")
     
     print("\n" + "=" * 60)
-    print("提示：用户现在可以在软件中点击「检查更新」获取新版本！")
+    print("提示：用户现在可以在软件中点击「同步武器配置」获取最新数据！")
     print("=" * 60)
     
     return 0

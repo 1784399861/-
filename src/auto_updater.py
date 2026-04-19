@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-自动更新模块
-通过 GitHub Releases 实现软件自动更新
+武器数据同步模块
+通过 GitHub Releases 同步 config/ 文件夹内的武器配置数据
 """
 
 import sys
@@ -12,17 +12,16 @@ import requests
 import zipfile
 import tempfile
 import shutil
-import subprocess
 from packaging import version as pkg_version
 from typing import Optional, Dict, Any, Tuple
-
-# 当前软件版本（打包时会被替换）
-CURRENT_VERSION = "1.0.2"
 
 # GitHub 仓库信息
 GITHUB_OWNER = "1784399861"
 GITHUB_REPO = "-"
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+
+# 数据版本文件名
+DATA_VERSION_FILE = "data_version.json"
 
 
 def get_app_dir() -> str:
@@ -30,12 +29,47 @@ def get_app_dir() -> str:
     if getattr(sys, 'frozen', False):
         return os.path.dirname(os.path.abspath(sys.argv[0]))
     else:
-        # 开发模式：__file__ 在 src/ 下，项目根目录是上一级
         src_dir = os.path.dirname(os.path.abspath(__file__))
         return os.path.dirname(src_dir)
 
 
-class AutoUpdater:
+def get_config_dir() -> str:
+    """获取 config 目录路径"""
+    return os.path.join(get_app_dir(), "config")
+
+
+def get_local_data_version() -> str:
+    """读取本地数据版本号，无则返回 '0.0.0'"""
+    version_path = os.path.join(get_config_dir(), DATA_VERSION_FILE)
+    try:
+        if os.path.exists(version_path):
+            with open(version_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get("version", "0.0.0")
+    except Exception:
+        pass
+    return "0.0.0"
+
+
+def set_local_data_version(ver: str):
+    """写入本地数据版本号"""
+    version_path = os.path.join(get_config_dir(), DATA_VERSION_FILE)
+    try:
+        data = {}
+        if os.path.exists(version_path):
+            with open(version_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        data["version"] = ver
+        data["update_time"] = __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(version_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"写入数据版本失败: {e}")
+
+
+class ConfigSyncer:
+    """武器配置数据同步器 — 只同步 config/ 目录"""
+
     def __init__(self, owner: str = None, repo: str = None, token: str = None):
         self.owner = owner or GITHUB_OWNER
         self.repo = repo or GITHUB_REPO
@@ -44,7 +78,7 @@ class AutoUpdater:
         self.session = requests.Session()
         if self.token:
             self.session.headers["Authorization"] = f"token {self.token}"
-        self.session.headers["User-Agent"] = f"{self.repo}-AutoUpdater"
+        self.session.headers["User-Agent"] = f"{self.repo}-ConfigSyncer"
 
     def _make_request(self, endpoint: str) -> Optional[Dict[str, Any]]:
         """发起 GitHub API 请求"""
@@ -62,335 +96,184 @@ class AutoUpdater:
         endpoint = f"/repos/{self.owner}/{self.repo}/releases/latest"
         return self._make_request(endpoint)
 
-    def get_all_releases(self) -> Optional[list]:
-        """获取所有 Release 列表"""
-        endpoint = f"/repos/{self.owner}/{self.repo}/releases"
-        return self._make_request(endpoint)
-
-    def check_update(self, current_version: str = None) -> Tuple[bool, Optional[Dict[str, Any]]]:
-        """检查是否有更新
+    def check_update(self) -> Tuple[bool, Optional[str], Optional[Dict[str, Any]]]:
+        """检查配置数据是否有更新
 
         Returns:
-            (是否有更新, 最新 Release 信息)
+            (是否有更新, 最新版本号, Release 信息)
         """
-        current = current_version or CURRENT_VERSION
         latest = self.get_latest_release()
-
         if not latest:
-            return False, None
+            return False, None, None
 
         latest_tag = latest.get("tag_name", "").lstrip("v")
+        local_ver = get_local_data_version()
+
         try:
-            has_update = pkg_version.parse(latest_tag) > pkg_version.parse(current)
-            return has_update, latest
+            has_update = pkg_version.parse(latest_tag) > pkg_version.parse(local_ver)
+            return has_update, latest_tag, latest
         except Exception as e:
             print(f"版本比较失败: {e}")
-            return False, latest
+            return False, latest_tag, latest
 
-    def find_asset(self, release: Dict[str, Any], asset_name: str = None) -> Optional[Dict[str, Any]]:
-        """查找 Release 中的资产文件
+    def find_config_asset(self, release: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """在 Release 资产中查找配置数据 zip
 
-        Args:
-            release: Release 信息
-            asset_name: 资产文件名（支持模糊匹配）
-
-        Returns:
-            匹配的资产信息
+        优先匹配名称含 config/weapon/data 的 zip 文件，
+        兜底取第一个 zip。
         """
         assets = release.get("assets", [])
         if not assets:
             return None
 
-        if not asset_name:
-            # 默认找 exe 或 zip
-            for asset in assets:
-                name = asset.get("name", "").lower()
-                if name.endswith(".exe") or name.endswith(".zip"):
-                    return asset
-            return assets[0] if assets else None
-
-        # 模糊匹配
+        # 优先匹配
         for asset in assets:
-            if asset_name in asset.get("name", ""):
+            name = asset.get("name", "").lower()
+            if name.endswith(".zip") and any(kw in name for kw in ("config", "weapon", "data")):
                 return asset
+
+        # 兜底：第一个 zip
+        for asset in assets:
+            if asset.get("name", "").lower().endswith(".zip"):
+                return asset
+
         return None
 
-    def download_asset(self, asset: Dict[str, Any], save_path: str = None) -> Optional[str]:
-        """下载资产文件
+    def sync_config(self, release: Dict[str, Any], on_progress=None) -> Tuple[bool, str]:
+        """同步配置数据：下载 zip → 备份 config → 解压替换 → 写入版本号
 
         Args:
-            asset: 资产信息
-            save_path: 保存路径（None则保存到临时目录）
+            release: GitHub Release 信息
+            on_progress: 进度回调 callable(msg: str)
 
         Returns:
-            下载后的文件路径
+            (是否成功, 消息)
         """
-        if not save_path:
-            save_dir = tempfile.gettempdir()
-            save_path = os.path.join(save_dir, asset.get("name", "update.zip"))
+        def _log(msg):
+            print(msg)
+            if on_progress:
+                on_progress(msg)
+
+        # 1. 查找资产
+        asset = self.find_config_asset(release)
+        if not asset:
+            return False, "Release 中未找到配置数据文件"
 
         download_url = asset.get("browser_download_url")
+        asset_name = asset.get("name", "config.zip")
         if not download_url:
-            print("未找到下载地址")
-            return None
+            return False, "未找到下载地址"
 
-        print(f"正在下载: {download_url}")
+        # 2. 下载
+        _log(f"正在下载: {asset_name}")
         try:
             response = self.session.get(download_url, stream=True, timeout=60)
             response.raise_for_status()
 
+            zip_path = os.path.join(tempfile.gettempdir(), asset_name)
             total_size = int(response.headers.get("content-length", 0))
             downloaded = 0
 
-            with open(save_path, "wb") as f:
+            with open(zip_path, "wb") as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
                         downloaded += len(chunk)
                         if total_size > 0:
-                            progress = (downloaded / total_size) * 100
-                            print(f"\r下载进度: {progress:.1f}%", end="", flush=True)
+                            pct = (downloaded / total_size) * 100
+                            _log(f"下载进度: {pct:.0f}%")
 
-            print("\n下载完成")
-            return save_path
+            _log("下载完成")
         except Exception as e:
-            print(f"\n下载失败: {e}")
-            if os.path.exists(save_path):
-                os.remove(save_path)
-            return None
+            return False, f"下载失败: {e}"
 
-    def extract_zip(self, zip_path: str, extract_to: str = None) -> Optional[str]:
-        """解压 ZIP 文件"""
-        if not extract_to:
-            extract_to = tempfile.mkdtemp(prefix="update_")
+        # 3. 备份当前 config
+        config_dir = get_config_dir()
+        backup_dir = f"{config_dir}.backup"
+        if os.path.exists(backup_dir):
+            try:
+                shutil.rmtree(backup_dir)
+            except Exception:
+                pass
 
-        print(f"正在解压到: {extract_to}")
+        if os.path.exists(config_dir):
+            try:
+                shutil.copytree(config_dir, backup_dir)
+                _log(f"已备份配置到: {backup_dir}")
+            except Exception as e:
+                _log(f"备份警告: {e}")
+        else:
+            os.makedirs(config_dir, exist_ok=True)
+
+        # 4. 解压并替换 config 内文件
+        _log("正在解压并更新配置...")
+        extract_dir = tempfile.mkdtemp(prefix="config_sync_")
         try:
             with zipfile.ZipFile(zip_path, "r") as zip_ref:
-                zip_ref.extractall(extract_to)
-            return extract_to
-        except Exception as e:
-            print(f"解压失败: {e}")
-            return None
+                zip_ref.extractall(extract_dir)
 
-    def perform_update(self, release: Dict[str, Any], asset_name: str = None,
-                      backup: bool = True) -> bool:
-        """执行更新
+            # 智能合并：如果 zip 内有 config/ 子目录，取其内容；否则直接取内容
+            src_dir = extract_dir
+            inner_config = os.path.join(extract_dir, "config")
+            if os.path.isdir(inner_config):
+                src_dir = inner_config
 
-        Args:
-            release: Release 信息
-            asset_name: 资产文件名
-            backup: 是否备份当前版本
-
-        Returns:
-            是否成功
-        """
-        # 1. 查找资产
-        asset = self.find_asset(release, asset_name)
-        if not asset:
-            print("未找到更新文件")
-            return False
-
-        # 2. 下载
-        zip_path = self.download_asset(asset)
-        if not zip_path:
-            return False
-
-        # 3. 解压
-        extract_dir = self.extract_zip(zip_path)
-        if not extract_dir:
-            return False
-
-        # 4. 备份当前版本
-        app_dir = get_app_dir()
-        backup_dir = None
-        if backup:
-            backup_dir = f"{app_dir}.backup"
-            if os.path.exists(backup_dir):
-                shutil.rmtree(backup_dir)
-            try:
-                shutil.copytree(app_dir, backup_dir)
-                print(f"已备份到: {backup_dir}")
-            except Exception as e:
-                print(f"备份失败: {e}")
-                backup_dir = None
-
-        # 5. 替换文件
-        print(f"正在更新: {app_dir}")
-        try:
-            # 复制解压后的文件到应用目录
-            for item in os.listdir(extract_dir):
-                src = os.path.join(extract_dir, item)
-                dst = os.path.join(app_dir, item)
-
+            # 复制文件到 config 目录（覆盖同名文件，保留本地独有文件）
+            file_count = 0
+            for item in os.listdir(src_dir):
+                src = os.path.join(src_dir, item)
+                dst = os.path.join(config_dir, item)
                 if os.path.isfile(src):
                     shutil.copy2(src, dst)
+                    file_count += 1
                 elif os.path.isdir(src):
                     if os.path.exists(dst):
                         shutil.rmtree(dst)
                     shutil.copytree(src, dst)
+                    file_count += 1
 
-            # 清理
-            os.remove(zip_path)
-            shutil.rmtree(extract_dir)
+            _log(f"配置更新完成，更新了 {file_count} 个文件/目录")
 
-            print("更新完成！请重启程序")
-            return True
         except Exception as e:
-            print(f"更新失败: {e}")
             # 尝试恢复备份
-            if backup_dir and os.path.exists(backup_dir):
-                print("正在恢复备份...")
+            if os.path.exists(backup_dir):
                 try:
-                    shutil.rmtree(app_dir)
-                    shutil.copytree(backup_dir, app_dir)
+                    shutil.rmtree(config_dir)
+                    shutil.copytree(backup_dir, config_dir)
+                    _log("已恢复备份")
+                except Exception:
+                    pass
+            return False, f"解压/替换失败: {e}"
+        finally:
+            # 清理临时文件
+            try:
+                os.remove(zip_path)
+                shutil.rmtree(extract_dir)
+            except Exception:
+                pass
+            # 清理备份
+            try:
+                if os.path.exists(backup_dir):
                     shutil.rmtree(backup_dir)
-                    print("备份已恢复")
-                except Exception as e2:
-                    print(f"备份恢复失败: {e2}")
-            return False
+            except Exception:
+                pass
 
-    def launch_updater_script(self, release: Dict[str, Any], asset_name: str = None) -> bool:
-        """启动独立的更新脚本（避免正在运行的文件被占用）
+        # 5. 写入版本号
+        new_version = release.get("tag_name", "").lstrip("v")
+        set_local_data_version(new_version)
+        _log(f"数据版本已更新至: v{new_version}")
 
-        创建一个临时的更新脚本，然后启动它来完成更新
-        """
-        app_dir = get_app_dir()
-        asset = self.find_asset(release, asset_name)
-        if not asset:
-            return False
-
-        # 创建更新脚本
-        updater_script = os.path.join(tempfile.gettempdir(), f"update_{self.repo}.py")
-
-        script_content = f'''#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-import os
-import sys
-import time
-import subprocess
-import requests
-import zipfile
-import shutil
-
-# 等待主程序退出
-print("等待程序退出...")
-time.sleep(2)
-
-# 配置
-APP_DIR = r"{app_dir}"
-DOWNLOAD_URL = r"{asset.get('browser_download_url', '')}"
-ASSET_NAME = r"{asset.get('name', '')}"
-BACKUP_DIR = r"{app_dir}.backup"
-
-print("开始更新...")
-print(f"应用目录: {{APP_DIR}}")
-print(f"下载地址: {{DOWNLOAD_URL}}")
-
-# 1. 下载
-zip_path = os.path.join(os.environ.get('TEMP', '.'), ASSET_NAME)
-print(f"下载到: {{zip_path}}")
-
-try:
-    response = requests.get(DOWNLOAD_URL, stream=True, timeout=60)
-    response.raise_for_status()
-    with open(zip_path, 'wb') as f:
-        for chunk in response.iter_content(chunk_size=8192):
-            if chunk:
-                f.write(chunk)
-    print("下载完成")
-except Exception as e:
-    print(f"下载失败: {{e}}")
-    input("按回车退出...")
-    sys.exit(1)
-
-# 2. 备份
-if os.path.exists(BACKUP_DIR):
-    shutil.rmtree(BACKUP_DIR)
-try:
-    shutil.copytree(APP_DIR, BACKUP_DIR)
-    print(f"已备份到: {{BACKUP_DIR}}")
-except Exception as e:
-    print(f"备份警告: {{e}}")
-
-# 3. 解压
-extract_dir = os.path.join(os.environ.get('TEMP', '.'), 'update_extract')
-if os.path.exists(extract_dir):
-    shutil.rmtree(extract_dir)
-
-try:
-    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(extract_dir)
-    print("解压完成")
-except Exception as e:
-    print(f"解压失败: {{e}}")
-    input("按回车退出...")
-    sys.exit(1)
-
-# 4. 替换文件
-print("正在替换文件...")
-try:
-    for item in os.listdir(extract_dir):
-        src = os.path.join(extract_dir, item)
-        dst = os.path.join(APP_DIR, item)
-        if os.path.isfile(src):
-            shutil.copy2(src, dst)
-        elif os.path.isdir(src):
-            if os.path.exists(dst):
-                shutil.rmtree(dst)
-            shutil.copytree(src, dst)
-    print("文件替换完成")
-except Exception as e:
-    print(f"替换失败: {{e}}")
-    input("按回车退出...")
-    sys.exit(1)
-
-# 5. 清理
-try:
-    os.remove(zip_path)
-    shutil.rmtree(extract_dir)
-except:
-    pass
-
-print("\\n更新完成！")
-print(f"备份在: {{BACKUP_DIR}}")
-print("正在启动程序...")
-
-# 启动主程序
-exe_name = "游戏工具中心.exe"
-exe_path = os.path.join(APP_DIR, exe_name)
-if os.path.exists(exe_path):
-    os.startfile(exe_path)
-else:
-    print(f"未找到: {{exe_path}}")
-    input("按回车退出...")
-
-sys.exit(0)
-'''
-
-        try:
-            with open(updater_script, "w", encoding="utf-8") as f:
-                f.write(script_content)
-
-            # 启动更新脚本
-            print(f"启动更新脚本: {updater_script}")
-            subprocess.Popen([sys.executable, updater_script],
-                            creationflags=subprocess.CREATE_NEW_CONSOLE)
-            return True
-        except Exception as e:
-            print(f"启动更新脚本失败: {e}")
-            return False
+        return True, f"武器数据已同步至 v{new_version}"
 
 
-# 便捷函数
-def check_for_updates(owner: str = None, repo: str = None,
-                     token: str = None, current_version: str = None) -> Dict[str, Any]:
-    """检查更新的便捷函数
+def check_for_config_update(owner: str = None, repo: str = None,
+                             token: str = None) -> Dict[str, Any]:
+    """检查配置数据更新的便捷函数
 
     Returns:
         {
             "has_update": bool,
-            "current_version": str,
+            "local_version": str,
             "latest_version": str,
             "release": dict,
             "error": str (optional)
@@ -398,22 +281,18 @@ def check_for_updates(owner: str = None, repo: str = None,
     """
     result = {
         "has_update": False,
-        "current_version": current_version or CURRENT_VERSION,
+        "local_version": get_local_data_version(),
         "latest_version": None,
         "release": None,
         "error": None
     }
 
     try:
-        updater = AutoUpdater(owner, repo, token)
-        has_update, release = updater.check_update(current_version)
-
+        syncer = ConfigSyncer(owner, repo, token)
+        has_update, latest_ver, release = syncer.check_update()
         result["has_update"] = has_update
+        result["latest_version"] = latest_ver
         result["release"] = release
-
-        if release:
-            result["latest_version"] = release.get("tag_name", "").lstrip("v")
-
     except Exception as e:
         result["error"] = str(e)
 
@@ -422,13 +301,13 @@ def check_for_updates(owner: str = None, repo: str = None,
 
 if __name__ == "__main__":
     # 测试
-    print(f"当前版本: {CURRENT_VERSION}")
+    print(f"本地数据版本: v{get_local_data_version()}")
 
-    updater = AutoUpdater()
-    has_update, release = updater.check_update()
+    syncer = ConfigSyncer()
+    has_update, latest_ver, release = syncer.check_update()
 
     if has_update:
-        print(f"发现新版本: {release.get('tag_name')}")
+        print(f"发现新数据版本: v{latest_ver}")
         print(f"发布说明:\n{release.get('body', '')}")
     else:
-        print("已是最新版本")
+        print("武器数据已是最新")

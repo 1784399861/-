@@ -83,8 +83,6 @@ APP_DIR = _APP_DIR
 
 # 软件版本
 SOFTWARE_VERSION = "1.0.2"
-GITHUB_OWNER = "1784399861"
-GITHUB_REPO = "-"
 
 # 添加当前目录到Python路径
 sys.path.insert(0, APP_DIR)
@@ -94,9 +92,9 @@ _write_diag("导入 recoil_core...")
 from recoil_core import RecoilCore
 _write_diag("✓ recoil_core")
 
-# 导入自动更新模块
+# 导入数据同步模块
 _write_diag("导入 auto_updater...")
-from auto_updater import AutoUpdater, check_for_updates
+from auto_updater import ConfigSyncer, check_for_config_update, get_local_data_version
 _write_diag("✓ auto_updater")
 
 # 设置UI主题
@@ -214,17 +212,6 @@ class RecoilControlUIv2:
             text_color="gray"
         )
         self.version_label.pack(side="left", padx=5)
-        
-        # 检查更新按钮
-        self.update_btn = ctk.CTkButton(
-            self.status_frame,
-            text="检查更新",
-            width=80,
-            height=25,
-            font=("Arial", 10),
-            command=self.check_for_updates
-        )
-        self.update_btn.pack(side="left", padx=5)
         
         # 状态标签
         self.status_label = ctk.CTkLabel(
@@ -1122,9 +1109,9 @@ class RecoilControlUIv2:
         self.global_tab = self.tabview.add("全局设置")
         self.create_global_settings_tab()
         
-        # 网络配置选项卡
-        self.network_tab = self.tabview.add("网络配置")
-        self.create_network_tab()
+        # 数据同步选项卡
+        self.network_tab = self.tabview.add("数据同步")
+        self.create_data_sync_tab()
     
     def create_weapon_params_tab(self):
         """创建武器参数选项卡"""
@@ -1256,6 +1243,16 @@ class RecoilControlUIv2:
             width=200
         )
         save_button.pack(pady=20)
+        
+        # 武器数据版本号（选项卡最底部）
+        data_ver = get_local_data_version()
+        self.weapon_data_version_label = ctk.CTkLabel(
+            self.weapon_tab,
+            text=f"武器数据版本: v{data_ver}",
+            font=("Arial", 10),
+            text_color="gray"
+        )
+        self.weapon_data_version_label.pack(pady=(0, 5))
     
     def save_weapon_params(self):
         """保存武器参数 - 完整保留压枪数组数据"""
@@ -1753,68 +1750,115 @@ class RecoilControlUIv2:
         except Exception as e:
             messagebox.showerror("错误", f"保存失败: {e}")
     
-    def create_network_tab(self):
-        """创建网络配置选项卡"""
-        # 服务器地址
-        server_frame = ctk.CTkFrame(self.network_tab)
-        server_frame.pack(fill="x", padx=10, pady=5)
+    def create_data_sync_tab(self):
+        """创建数据同步选项卡"""
+        # 当前数据版本显示
+        version_frame = ctk.CTkFrame(self.network_tab)
+        version_frame.pack(fill="x", padx=10, pady=10)
         
-        ctk.CTkLabel(server_frame, text="配置服务器:", width=100).pack(side="left", padx=5)
-        self.server_entry = ctk.CTkEntry(server_frame, width=300)
-        self.server_entry.insert(0, "https://api.example.com/weapons")
-        self.server_entry.pack(side="left", padx=5)
+        current_ver = get_local_data_version()
+        ctk.CTkLabel(version_frame, text="当前武器数据版本:", width=140).pack(side="left", padx=5)
+        self.data_version_label = ctk.CTkLabel(
+            version_frame, 
+            text=f"v{current_ver}",
+            font=("Arial", 14, "bold"),
+            text_color="#00b894"
+        )
+        self.data_version_label.pack(side="left", padx=5)
         
-        # 同步按钮
+        # 同步武器配置按钮
         sync_button = ctk.CTkButton(
             self.network_tab,
             text="同步武器配置",
-            command=self.sync_weapons,
-            width=200
+            command=self.sync_weapon_config,
+            width=200,
+            height=40,
+            font=("Arial", 13, "bold"),
+            fg_color="#0984e3",
+            hover_color="#0770c2"
         )
-        sync_button.pack(pady=10)
+        sync_button.pack(pady=20)
         
-        # 检查更新按钮
-        update_button = ctk.CTkButton(
-            self.network_tab,
-            text="检查更新",
-            command=self.check_updates,
-            width=200
-        )
-        update_button.pack(pady=10)
-        
-        # 状态显示
+        # 同步状态显示
         self.network_status = ctk.CTkLabel(
             self.network_tab,
-            text="状态: 未连接",
-            font=("Arial", 12)
+            text="",
+            font=("Arial", 11),
+            text_color="gray"
         )
-        self.network_status.pack(pady=10)
+        self.network_status.pack(pady=5)
+        
+        # 同步说明
+        info_frame = ctk.CTkFrame(self.network_tab)
+        info_frame.pack(fill="x", padx=10, pady=10)
+        
+        ctk.CTkLabel(
+            info_frame, 
+            text="点击「同步武器配置」从云端获取最新的武器压枪数据。\n"
+                 "同步会覆盖本地同名配置文件，请确保重要修改已备份。",
+            font=("Arial", 10),
+            text_color="gray",
+            justify="left"
+        ).pack(padx=10, pady=10, anchor="w")
     
-    def sync_weapons(self):
-        """同步武器配置"""
-        self.network_status.configure(text="状态: 正在同步...")
-        self.core.log("开始同步武器配置")
-        
-        # 模拟网络请求
-        def sync_thread():
-            time.sleep(2)  # 模拟网络延迟
-            self.root.after(0, lambda: self.network_status.configure(text="状态: 同步完成"))
-            self.core.log("武器配置同步完成")
-        
-        threading.Thread(target=sync_thread, daemon=True).start()
-    
-    def check_updates(self):
-        """检查更新"""
-        self.network_status.configure(text="状态: 检查更新中...")
-        self.core.log("检查更新")
-        
-        # 模拟检查更新
-        def check_thread():
-            time.sleep(1)
-            self.root.after(0, lambda: self.network_status.configure(text="状态: 已是最新版本"))
-            self.core.log("检查更新完成: 已是最新版本")
-        
-        threading.Thread(target=check_thread, daemon=True).start()
+    def sync_weapon_config(self):
+        """同步武器配置数据"""
+        self.network_status.configure(text="正在检查更新...", text_color="gray")
+        self.core.log("正在检查武器数据更新...")
+
+        def _sync():
+            try:
+                # 先检查是否有更新
+                result = check_for_config_update()
+                
+                if result.get("error"):
+                    self.root.after(0, lambda: self.network_status.configure(
+                        text=f"检查失败: {result['error']}", text_color="#e74c3c"))
+                    self.root.after(0, lambda: self.core.log(f"数据同步检查失败: {result['error']}"))
+                    return
+
+                if not result["has_update"]:
+                    local_ver = result.get("local_version", "?")
+                    self.root.after(0, lambda: self.network_status.configure(
+                        text=f"已是最新版本 v{local_ver}", text_color="#00b894"))
+                    self.root.after(0, lambda: self.core.log("武器数据已是最新版本"))
+                    return
+
+                # 有更新，执行同步
+                release = result["release"]
+                latest_ver = result.get("latest_version", "?")
+                self.root.after(0, lambda: self.network_status.configure(
+                    text=f"发现新版本 v{latest_ver}，正在同步...", text_color="#0984e3"))
+                
+                syncer = ConfigSyncer()
+                
+                def on_progress(msg):
+                    self.root.after(0, lambda m=msg: self.network_status.configure(text=m))
+                
+                success, msg = syncer.sync_config(release, on_progress=on_progress)
+                
+                if success:
+                    # 更新版本显示
+                    new_ver = get_local_data_version()
+                    self.root.after(0, lambda: self.data_version_label.configure(text=f"v{new_ver}"))
+                    self.root.after(0, lambda: self.weapon_data_version_label.configure(text=f"武器数据版本: v{new_ver}"))
+                    self.root.after(0, lambda: self.network_status.configure(text=msg, text_color="#00b894"))
+                    self.root.after(0, lambda: self.core.log(msg))
+                    # 刷新武器列表
+                    self.root.after(0, self.refresh_weapon_list)
+                    self.root.after(0, lambda: messagebox.showinfo("同步完成", msg))
+                else:
+                    self.root.after(0, lambda: self.network_status.configure(text=msg, text_color="#e74c3c"))
+                    self.root.after(0, lambda: self.core.log(f"数据同步失败: {msg}"))
+                    self.root.after(0, lambda: messagebox.showerror("同步失败", msg))
+
+            except Exception as e:
+                err_msg = str(e)
+                self.root.after(0, lambda: self.network_status.configure(
+                    text=f"同步失败: {err_msg}", text_color="#e74c3c"))
+                self.root.after(0, lambda: self.core.log(f"数据同步异常: {err_msg}"))
+
+        threading.Thread(target=_sync, daemon=True).start()
     
     def create_log_panel(self):
         """创建日志面板"""
@@ -2051,72 +2095,6 @@ class RecoilControlUIv2:
             # 清理资源
             self.core.cleanup()
     
-    def check_for_updates(self):
-        """检查并执行软件更新"""
-        self.log("正在检查更新...")
-        self.update_btn.configure(state="disabled", text="检查中...")
-        
-        def _check():
-            try:
-                result = check_for_updates(
-                    owner=GITHUB_OWNER,
-                    repo=GITHUB_REPO,
-                    current_version=SOFTWARE_VERSION
-                )
-                
-                if result.get("error"):
-                    self.root.after(0, lambda: self._show_update_error(result["error"]))
-                    return
-                
-                if result["has_update"]:
-                    release = result["release"]
-                    latest_ver = result["latest_version"]
-                    self.root.after(0, lambda: self._show_update_available(latest_ver, release))
-                else:
-                    self.root.after(0, lambda: self._show_no_update())
-                    
-            except Exception as e:
-                self.root.after(0, lambda: self._show_update_error(str(e)))
-            finally:
-                self.root.after(0, lambda: self.update_btn.configure(state="normal", text="检查更新"))
-        
-        threading.Thread(target=_check, daemon=True).start()
-    
-    def _show_update_available(self, latest_version: str, release: dict):
-        """显示发现新版本的对话框"""
-        body = release.get("body", "暂无更新说明")
-        msg = f"发现新版本 v{latest_version}！\n\n{body}\n\n是否立即更新？"
-        
-        if messagebox.askyesno("发现新版本", msg):
-            self._perform_update(release)
-    
-    def _show_no_update(self):
-        """显示已是最新版本"""
-        self.log(f"已是最新版本 v{SOFTWARE_VERSION}")
-        messagebox.showinfo("检查更新", f"已是最新版本 v{SOFTWARE_VERSION}")
-    
-    def _show_update_error(self, error: str):
-        """显示更新检查失败"""
-        self.log(f"更新检查失败: {error}")
-        messagebox.showerror("检查更新失败", f"无法检查更新:\n{error}")
-    
-    def _perform_update(self, release: dict):
-        """执行更新（启动独立更新脚本）"""
-        self.log("准备更新...")
-        
-        try:
-            updater = AutoUpdater(GITHUB_OWNER, GITHUB_REPO)
-            success = updater.launch_updater_script(release)
-            
-            if success:
-                self.log("更新脚本已启动，程序即将退出...")
-                messagebox.showinfo("更新", "更新脚本已启动，请关闭此程序。\n\n更新完成后会自动重启。")
-                # 退出程序
-                self.root.quit()
-            else:
-                messagebox.showerror("更新失败", "无法启动更新脚本")
-        except Exception as e:
-            messagebox.showerror("更新失败", f"更新失败:\n{e}")
 
 def _extract_bundled_config():
     """PyInstaller 打包模式：如果 exe 同目录没有 config，从打包目录复制出来
