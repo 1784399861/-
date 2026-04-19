@@ -205,17 +205,34 @@ def main():
         return 1
     
     # 步骤 2: 创建 GitHub Release
+    release_url = None
     if not create_github_release():
         print("\n⚠️  Release 创建失败，但代码已推送")
         print("你可以手动在 GitHub 网页创建 Release")
-        return 1
+    else:
+        release_url = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/releases/tag/v{VERSION}"
     
     print("\n" + "=" * 60)
     print("✅ 发布完成！")
     print("=" * 60)
     print(f"版本: v{VERSION}")
     print(f"仓库: https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}")
-    print(f"Release: https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/releases/tag/v{VERSION}")
+    
+    if release_url:
+        print(f"Release: {release_url}")
+        
+        # 自动打开浏览器到 Release 页面
+        try:
+            import webbrowser
+            print("\n正在打开浏览器...")
+            webbrowser.open(release_url)
+        except Exception as e:
+            print(f"无法自动打开浏览器: {e}")
+            print(f"请手动访问: {release_url}")
+    
+    print("\n" + "=" * 60)
+    print("提示：用户现在可以在软件中点击「检查更新」获取新版本！")
+    print("=" * 60)
     
     return 0
 
