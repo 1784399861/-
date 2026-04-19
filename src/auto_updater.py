@@ -17,7 +17,7 @@ from packaging import version as pkg_version
 from typing import Optional, Dict, Any, Tuple
 
 # 当前软件版本（打包时会被替换）
-CURRENT_VERSION = "1.0.0"
+CURRENT_VERSION = "1.0.2"
 
 # GitHub 仓库信息
 GITHUB_OWNER = "1784399861"

@@ -82,7 +82,7 @@ from datetime import datetime
 APP_DIR = _APP_DIR
 
 # 软件版本
-SOFTWARE_VERSION = "1.0.0"
+SOFTWARE_VERSION = "1.0.2"
 GITHUB_OWNER = "1784399861"
 GITHUB_REPO = "-"
 

@@ -15,7 +15,7 @@ from datetime import datetime
 # ================== 配置区域（请修改这里） ==================
 
 # 版本号（每次发布前修改这里）
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 
 # Release 标题
 RELEASE_TITLE = f"v{VERSION} - 更新说明"
