@@ -37,7 +37,7 @@ if sys.platform == "win32":
 # ================== 配置区域（请修改这里） ==================
 
 # 武器数据版本号（每次发布前修改这里）
-DATA_VERSION = "1.0.1"
+DATA_VERSION = "1.0.4"
 
 # Release 描述（支持 Markdown）
 RELEASE_BODY = f"""## 武器数据 v{DATA_VERSION}
