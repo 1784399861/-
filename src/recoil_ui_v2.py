@@ -2050,40 +2050,7 @@ class RecoilControlUIv2:
         finally:
             # 清理资源
             self.core.cleanup()
-
-def _extract_bundled_config():
-    """PyInstaller 打包模式：如果 exe 同目录没有 config，从打包目录复制出来
     
-    PyInstaller --add-data 把 config 打包进 exe，运行时解压到 sys._MEIPASS 临时目录。
-    但 config 需要持久化（用户修改后要保存），所以首次运行时复制到 exe 同目录。
-    """
-    meipass_dir = getattr(sys, '_MEIPASS', None)
-    if not meipass_dir:
-        return  # 非 PyInstaller 模式，跳过
-    
-    app_config_dir = os.path.join(_APP_DIR, "config")
-    bundled_config_dir = os.path.join(meipass_dir, "config")
-    
-    if not os.path.exists(bundled_config_dir):
-        return  # 打包时没有包含 config
-    
-    # 如果 exe 同目录已有 config，不覆盖（保留用户修改）
-    if os.path.exists(app_config_dir):
-        # 只补充缺失的文件（不覆盖已有文件）
-        import shutil
-        for item in os.listdir(bundled_config_dir):
-            src = os.path.join(bundled_config_dir, item)
-            dst = os.path.join(app_config_dir, item)
-            if not os.path.exists(dst):
-                if os.path.isdir(src):
-                    shutil.copytree(src, dst)
-                else:
-                    shutil.copy2(src, dst)
-        else:
-            # 首次运行：完整复制 config 目录
-            import shutil
-            shutil.copytree(bundled_config_dir, app_config_dir)
-
     def check_for_updates(self):
         """检查并执行软件更新"""
         self.log("正在检查更新...")
@@ -2150,6 +2117,39 @@ def _extract_bundled_config():
                 messagebox.showerror("更新失败", "无法启动更新脚本")
         except Exception as e:
             messagebox.showerror("更新失败", f"更新失败:\n{e}")
+
+def _extract_bundled_config():
+    """PyInstaller 打包模式：如果 exe 同目录没有 config，从打包目录复制出来
+    
+    PyInstaller --add-data 把 config 打包进 exe，运行时解压到 sys._MEIPASS 临时目录。
+    但 config 需要持久化（用户修改后要保存），所以首次运行时复制到 exe 同目录。
+    """
+    meipass_dir = getattr(sys, '_MEIPASS', None)
+    if not meipass_dir:
+        return  # 非 PyInstaller 模式，跳过
+    
+    app_config_dir = os.path.join(_APP_DIR, "config")
+    bundled_config_dir = os.path.join(meipass_dir, "config")
+    
+    if not os.path.exists(bundled_config_dir):
+        return  # 打包时没有包含 config
+    
+    # 如果 exe 同目录已有 config，不覆盖（保留用户修改）
+    if os.path.exists(app_config_dir):
+        # 只补充缺失的文件（不覆盖已有文件）
+        import shutil
+        for item in os.listdir(bundled_config_dir):
+            src = os.path.join(bundled_config_dir, item)
+            dst = os.path.join(app_config_dir, item)
+            if not os.path.exists(dst):
+                if os.path.isdir(src):
+                    shutil.copytree(src, dst)
+                else:
+                    shutil.copy2(src, dst)
+    else:
+        # 首次运行：完整复制 config 目录
+        import shutil
+        shutil.copytree(bundled_config_dir, app_config_dir)
 
 def main():
     """主函数"""
