@@ -1,0 +1,15 @@
+{
+  "hotkey": "F1",
+  "fire_button": "LButton",
+  "move_interval": 10,
+  "auto_start": false,
+  "minimize_to_tray": true,
+  "log_level": "INFO",
+  "ui_theme": "dark",
+  "language": "zh_CN",
+  "check_updates_on_startup": true,
+  "sync_weapons_on_startup": false,
+  "server_url": "https://api.example.com/weapons",
+  "last_sync": null,
+  "version": "1.0.0"
+}

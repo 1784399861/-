@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+crash.log
+startup_debug.log
+
+# Build artifacts
+recoil_ui_v2.dist/
+pyinstaller_dist/
+*.exe
+
+# Config (可选，视情况而定)
+# config/
+
+# WorkBuddy 工作记忆
+.workbuddy/
