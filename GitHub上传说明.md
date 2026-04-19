@@ -90,6 +90,6 @@ fatal: unable to access '...': Failed to connect to github.com port 443 after ..
 | 配置项 | 值 |
 |--------|-----|
 | GitHub 用户名 | `1784399861` |
-| 仓库名称 | `recoil_core` |
-| 仓库地址 | https://github.com/1784399861/recoil_core |
+| 仓库名称 | `-` |
+| 仓库地址 | https://github.com/1784399861/- |
 | 本地项目路径 | `C:\Users\XOS\Desktop\压枪软件` |
