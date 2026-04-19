@@ -25,8 +25,18 @@ DATA_VERSION_FILE = "data_version.json"
 
 
 def get_app_dir() -> str:
-    """获取应用目录"""
-    if getattr(sys, 'frozen', False):
+    """获取应用目录（与 recoil_ui_v2.py 的 _get_app_dir 逻辑一致）
+
+    打包模式（Nuitka / PyInstaller onefile）：
+    - sys.argv[0] → exe 实际所在路径
+    - config 等文件在 exe 同目录下
+
+    开发模式：
+    - __file__ 在 src/ 目录下
+    - 项目根目录是 src/ 的上一级
+    """
+    is_packaged = not sys.argv[0].endswith('.py')
+    if is_packaged:
         return os.path.dirname(os.path.abspath(sys.argv[0]))
     else:
         src_dir = os.path.dirname(os.path.abspath(__file__))

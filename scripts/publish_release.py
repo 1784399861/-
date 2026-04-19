@@ -12,6 +12,11 @@ import requests
 import json
 from datetime import datetime
 
+# 修复 Windows 控制台 UTF-8 输出（避免 emoji/中文导致 UnicodeEncodeError）
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 # ================== 配置区域（请修改这里） ==================
 
 # 版本号（每次发布前修改这里）

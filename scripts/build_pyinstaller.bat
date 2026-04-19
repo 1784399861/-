@@ -24,8 +24,8 @@ echo.
 
 pyinstaller --noconfirm --onefile --windowed ^
     --name "游戏工具中心" ^
-    --add-binary "vendor\IbInputSimulator.dll;." ^
-    --add-data "config;config" ^
+    --add-binary "%PROJECT_ROOT%\vendor\IbInputSimulator.dll;." ^
+    --add-data "%PROJECT_ROOT%\config;config" ^
     --hidden-import=lua_parser ^
     --hidden-import=pattern_recorder ^
     --hidden-import=PIL ^
@@ -33,7 +33,7 @@ pyinstaller --noconfirm --onefile --windowed ^
     --distpath %DIST_DIR% ^
     --workpath _pyinstaller_build ^
     --specpath _pyinstaller_build ^
-    src\recoil_ui_v2.py
+    %PROJECT_ROOT%\src\recoil_ui_v2.py
 
 if %ERRORLEVEL% neq 0 (
     echo.
